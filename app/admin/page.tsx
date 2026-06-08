@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Team, Bid, PAYOUT_RATES, PAYOUT_BONUSES, ROUND_LABELS } from '@/lib/types';
+import { getSupabaseClient } from '@/lib/supabase-client';
 
 const ROUND_OPTIONS = [
   { value: 'active',            label: '✅ Active (in tournament)' },
