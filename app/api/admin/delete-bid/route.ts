@@ -11,11 +11,9 @@ export async function POST(req: NextRequest) {
 
     const supabase = getSupabaseAdmin();
 
-    // Delete the bid
     const { error: delError } = await supabase.from('bids').delete().eq('id', bidId);
     if (delError) return NextResponse.json({ success: false, error: delError.message }, { status: 500 });
 
-    // Recalculate the team's current winning bid
     const { data: topBid } = await supabase
       .from('bids')
       .select('amount, bidder_name')
@@ -27,13 +25,13 @@ export async function POST(req: NextRequest) {
     await supabase
       .from('teams')
       .update({
-        current_bid:   topBid?.amount   ?? 0,
+        current_bid:   topBid?.amount      ?? 0,
         current_owner: topBid?.bidder_name ?? null,
       })
       .eq('id', teamId);
 
     return NextResponse.json({ success: true });
-  } catch (err) {
+  } catch {
     return NextResponse.json({ success: false, error: 'Server error.' }, { status: 500 });
   }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { Team, PAYOUT_RATES } from '@/lib/types';
+import { Team, PAYOUT_RATES, PAYOUT_BONUSES } from '@/lib/types';
 
 interface Props {
   teams: Team[];
@@ -27,8 +27,9 @@ export default function Leaderboard({ teams }: Props) {
   const entries: Entry[] = Array.from(ownerMap.entries()).map(([name, ownedTeams]) => {
     const totalOwed = ownedTeams.reduce((s, t) => s + t.current_bid, 0);
     const projectedPayout = ownedTeams.reduce((s, t) => {
-      const rate = PAYOUT_RATES[t.round_status] ?? 0;
-      return s + rate * totalPool;
+      const rate  = PAYOUT_RATES[t.round_status]   ?? 0;
+      const bonus = PAYOUT_BONUSES[t.round_status] ?? 0;
+      return s + rate * totalPool + bonus;
     }, 0);
     return { name, teams: ownedTeams, totalOwed, projectedPayout };
   });
@@ -89,7 +90,7 @@ export default function Leaderboard({ teams }: Props) {
       })}
 
       <div className="text-gray-600 text-xs text-center pt-2">
-        * Projected payouts update as teams advance. Final payouts: Champion 40% · Runner-Up 20% · Semis 10% each · QF 5% each
+        * Projected payouts update as teams advance. Final payouts: Champion 40% + $100 · Runner-Up 20% + $50 · Semis 10% each · QF 5% each
       </div>
     </div>
   );

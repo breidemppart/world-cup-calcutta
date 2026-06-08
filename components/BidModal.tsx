@@ -71,7 +71,6 @@ export default function BidModal({ team, onClose, onSuccess }: Props) {
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm shadow-2xl">
-        {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-gray-800">
           <div className="flex items-center gap-3">
             <span className="text-3xl">{team.flag_emoji}</span>
@@ -83,7 +82,6 @@ export default function BidModal({ team, onClose, onSuccess }: Props) {
           <button onClick={onClose} className="text-gray-600 hover:text-gray-400 text-2xl leading-none p-1">×</button>
         </div>
 
-        {/* Current bid */}
         <div className="px-5 pt-4">
           <div className="bg-gray-800/60 rounded-lg p-3 flex justify-between items-center">
             <span className="text-gray-400 text-sm">Current bid</span>
@@ -99,7 +97,6 @@ export default function BidModal({ team, onClose, onSuccess }: Props) {
           <div className="text-gray-500 text-xs text-right mt-1">Minimum bid: ${minBid.toFixed(2)}</div>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           <div>
             <label className="block text-gray-400 text-sm mb-1.5">Your name</label>

@@ -11,14 +11,12 @@ interface Props {
 }
 
 export default function GroupGrid({ teams, onBid, searchQuery }: Props) {
-  // Group teams by group letter
   const groups: Record<string, Team[]> = {};
   for (const team of teams) {
     if (!groups[team.group_name]) groups[team.group_name] = [];
     groups[team.group_name].push(team);
   }
 
-  // Filter by search query
   const query = searchQuery.toLowerCase().trim();
   const visibleGroups = Object.entries(groups)
     .sort(([a], [b]) => a.localeCompare(b))

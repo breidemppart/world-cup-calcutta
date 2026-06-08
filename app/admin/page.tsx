@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Team, Bid, PAYOUT_RATES, ROUND_LABELS } from '@/lib/types';
+import { Team, Bid, PAYOUT_RATES, PAYOUT_BONUSES, ROUND_LABELS } from '@/lib/types';
 
 const ROUND_OPTIONS = [
   { value: 'active',            label: '✅ Active (in tournament)' },
@@ -10,8 +10,8 @@ const ROUND_OPTIONS = [
   { value: 'r16_eliminated',    label: '❌ Eliminated – Round of 16' },
   { value: 'qf_eliminated',     label: '⚡ Quarterfinalist (5%)' },
   { value: 'sf_eliminated',     label: '🎯 Semifinalist (10%)' },
-  { value: 'runner_up',         label: '🥈 Runner-Up (20%)' },
-  { value: 'champion',          label: '🏆 Champion (40%)' },
+  { value: 'runner_up',         label: '🥈 Runner-Up (20% + $50)' },
+  { value: 'champion',          label: '🏆 Champion (40% + $100)' },
 ];
 
 export default function AdminPage() {
@@ -27,7 +27,6 @@ export default function AdminPage() {
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    // Verify password by hitting a protected endpoint
     const res = await fetch('/api/admin/update-status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -98,7 +97,6 @@ export default function AdminPage() {
     setTimeout(() => setMsg(''), 3000);
   }
 
-  // Payout calculation
   const totalPool = teams.reduce((s, t) => s + (t.current_bid || 0), 0);
   const payouts = teams
     .filter(t => PAYOUT_RATES[t.round_status] !== undefined && t.current_owner)
@@ -106,10 +104,9 @@ export default function AdminPage() {
       team: t,
       owner: t.current_owner!,
       pct: (PAYOUT_RATES[t.round_status]! * 100).toFixed(0),
-      amount: PAYOUT_RATES[t.round_status]! * totalPool,
+      amount: PAYOUT_RATES[t.round_status]! * totalPool + (PAYOUT_BONUSES[t.round_status] ?? 0),
     }));
 
-  // Login screen
   if (!authed) {
     return (
       <div className="min-h-screen bg-[#070b14] flex items-center justify-center p-4">
@@ -157,13 +154,12 @@ export default function AdminPage() {
         <div className="mx-6 mt-4 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-sm">{msg}</div>
       )}
 
-      {/* Summary stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 px-6 py-4">
         {[
-          { label: 'Total Pool',    val: `$${totalPool.toFixed(2)}` },
-          { label: 'Bids Placed',   val: bids.length },
-          { label: 'Teams Owned',   val: teams.filter(t => t.current_bid > 0).length },
-          { label: 'Teams Unbid',   val: teams.filter(t => t.current_bid === 0).length },
+          { label: 'Total Pool',  val: `$${totalPool.toFixed(2)}` },
+          { label: 'Bids Placed', val: bids.length },
+          { label: 'Teams Owned', val: teams.filter(t => t.current_bid > 0).length },
+          { label: 'Teams Unbid', val: teams.filter(t => t.current_bid === 0).length },
         ].map(s => (
           <div key={s.label} className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
             <div className="text-gray-500 text-xs uppercase tracking-wider">{s.label}</div>
@@ -172,7 +168,6 @@ export default function AdminPage() {
         ))}
       </div>
 
-      {/* Tabs */}
       <div className="px-6">
         <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1 w-fit mb-4">
           {(['teams', 'bids', 'payouts'] as const).map(t => (
@@ -188,7 +183,6 @@ export default function AdminPage() {
           ))}
         </div>
 
-        {/* Teams tab */}
         {activeTab === 'teams' && (
           <div className="space-y-2 pb-12">
             <p className="text-gray-500 text-sm mb-3">Update each team&apos;s tournament status as they advance or are eliminated.</p>
@@ -226,7 +220,6 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* Bids tab */}
         {activeTab === 'bids' && (
           <div className="pb-12">
             <div className="flex items-center gap-3 mb-3">
@@ -277,12 +270,12 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* Payouts tab */}
         {activeTab === 'payouts' && (
           <div className="pb-12 space-y-4">
             <div className="bg-yellow-900/20 border border-yellow-800/30 rounded-xl p-4">
               <div className="text-yellow-500/70 text-xs uppercase tracking-wider mb-1">Total Prize Pool</div>
               <div className="text-yellow-400 font-black text-3xl">${totalPool.toFixed(2)}</div>
+              <div className="text-gray-500 text-xs mt-1">Champion gets 40% + $100 · Runner-Up gets 20% + $50</div>
             </div>
 
             {payouts.length === 0 ? (
@@ -321,7 +314,6 @@ export default function AdminPage() {
               </div>
             )}
 
-            {/* Per-person summary */}
             {payouts.length > 0 && (() => {
               const byPerson = new Map<string, number>();
               for (const p of payouts) byPerson.set(p.owner, (byPerson.get(p.owner) ?? 0) + p.amount);

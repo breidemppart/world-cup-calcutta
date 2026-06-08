@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Server-side only — uses service role key to bypass RLS
 export function getSupabaseAdmin() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

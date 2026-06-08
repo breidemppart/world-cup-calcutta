@@ -1,6 +1,6 @@
 'use client';
 
-import { Team, PAYOUT_RATES } from '@/lib/types';
+import { Team } from '@/lib/types';
 
 interface Props {
   teams: Team[];
@@ -11,10 +11,10 @@ export default function PrizePoolBanner({ teams }: Props) {
   const biddedTeams = teams.filter(t => t.current_bid > 0).length;
 
   const payoutTiers = [
-    { label: '🏆 Champion',    pct: 40, est: totalPool * 0.40 },
-    { label: '🥈 Runner-Up',   pct: 20, est: totalPool * 0.20 },
-    { label: '🎯 Semifinals',  pct: 10, est: totalPool * 0.10, note: 'each (×2)' },
-    { label: '⚡ Quarterfinals', pct: 5, est: totalPool * 0.05, note: 'each (×4)' },
+    { label: '🏆 Champion',      pct: 40, est: totalPool * 0.40 + 100, note: '+$100 bonus' },
+    { label: '🥈 Runner-Up',     pct: 20, est: totalPool * 0.20 + 50,  note: '+$50 bonus' },
+    { label: '🎯 Semifinals',    pct: 10, est: totalPool * 0.10, note: 'each (×2)' },
+    { label: '⚡ Quarterfinals', pct:  5, est: totalPool * 0.05, note: 'each (×4)' },
   ];
 
   return (
@@ -42,7 +42,7 @@ export default function PrizePoolBanner({ teams }: Props) {
               <div className="text-gray-300 text-xs tabular-nums">
                 ${tier.est.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
               </div>
-              {tier.note && <div className="text-gray-600 text-[9px]">{tier.note}</div>}
+              {tier.note && <div className="text-gray-500 text-[9px]">{tier.note}</div>}
             </div>
           ))}
         </div>

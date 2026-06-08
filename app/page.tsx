@@ -2,7 +2,7 @@ import { getSupabaseAdmin } from '@/lib/supabase-server';
 import MainClient from '@/components/MainClient';
 import type { Team, Bid } from '@/lib/types';
 
-export const revalidate = 0; // always fresh on server render
+export const revalidate = 0;
 
 export default async function Home() {
   const supabase = getSupabaseAdmin();

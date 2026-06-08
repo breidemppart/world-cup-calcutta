@@ -54,6 +54,12 @@ export const PAYOUT_RATES: Partial<Record<RoundStatus, number>> = {
   qf_eliminated: 0.05,
 };
 
+// Flat bonus added on top of the percentage payout
+export const PAYOUT_BONUSES: Partial<Record<RoundStatus, number>> = {
+  champion: 100,
+  runner_up: 50,
+};
+
 export const ROUND_LABELS: Partial<Record<RoundStatus, string>> = {
   active: 'In Tournament',
   group_eliminated: 'Group Stage',

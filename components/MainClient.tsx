@@ -19,13 +19,13 @@ interface Props {
 }
 
 export default function MainClient({ initialTeams, initialBids }: Props) {
-  const [teams, setTeams]           = useState<Team[]>(initialTeams);
-  const [bids, setBids]             = useState<Bid[]>(initialBids);
+  const [teams, setTeams]               = useState<Team[]>(initialTeams);
+  const [bids, setBids]                 = useState<Bid[]>(initialBids);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
-  const [activeTab, setActiveTab]   = useState<Tab>('teams');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [refreshing, setRefreshing] = useState(false);
-  const [toast, setToast]           = useState<string | null>(null);
+  const [activeTab, setActiveTab]       = useState<Tab>('teams');
+  const [searchQuery, setSearchQuery]   = useState('');
+  const [refreshing, setRefreshing]     = useState(false);
+  const [toast, setToast]               = useState<string | null>(null);
 
   const supabase = getSupabaseClient();
 
@@ -40,7 +40,6 @@ export default function MainClient({ initialTeams, initialBids }: Props) {
     setRefreshing(false);
   }, []);
 
-  // Realtime subscription
   useEffect(() => {
     const channel = supabase
       .channel('calcutta-live')
@@ -55,12 +54,12 @@ export default function MainClient({ initialTeams, initialBids }: Props) {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // Update selectedTeam when teams update (so modal shows fresh data)
   useEffect(() => {
     if (selectedTeam) {
       const updated = teams.find(t => t.id === selectedTeam.id);
       if (updated) setSelectedTeam(updated);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teams]);
 
   function showToast(msg: string) {
@@ -71,15 +70,14 @@ export default function MainClient({ initialTeams, initialBids }: Props) {
   const biddingOpen = Date.now() < BID_CLOSE_TIME.getTime();
 
   const TABS: { id: Tab; label: string }[] = [
-    { id: 'teams',      label: '⚽ All Teams' },
+    { id: 'teams',       label: '⚽ All Teams' },
     { id: 'leaderboard', label: '🏆 Leaderboard' },
-    { id: 'history',    label: '📋 Bid History' },
+    { id: 'history',     label: '📋 Bid History' },
   ];
 
   return (
     <div className="min-h-screen bg-[#070b14]">
-      {/* ── Header ─────────────────────────────────── */}
-      <header className="border-b border-gray-800/60 bg-[#07091300] backdrop-blur-sm sticky top-0 z-40">
+      <header className="border-b border-gray-800/60 backdrop-blur-sm sticky top-0 z-40 bg-[#070b14]/95">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
             <span className="text-3xl">⚽</span>
@@ -109,10 +107,8 @@ export default function MainClient({ initialTeams, initialBids }: Props) {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-5">
-        {/* Prize pool */}
         <PrizePoolBanner teams={teams} />
 
-        {/* Tabs */}
         <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1 w-fit">
           {TABS.map(tab => (
             <button
@@ -129,7 +125,6 @@ export default function MainClient({ initialTeams, initialBids }: Props) {
           ))}
         </div>
 
-        {/* Search (teams tab only) */}
         {activeTab === 'teams' && (
           <div className="relative">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -145,7 +140,6 @@ export default function MainClient({ initialTeams, initialBids }: Props) {
           </div>
         )}
 
-        {/* Tab content */}
         {activeTab === 'teams' && (
           <GroupGrid teams={teams} onBid={setSelectedTeam} searchQuery={searchQuery} />
         )}
@@ -160,14 +154,12 @@ export default function MainClient({ initialTeams, initialBids }: Props) {
         )}
       </main>
 
-      {/* Bid modal */}
       <BidModal
         team={selectedTeam}
         onClose={() => setSelectedTeam(null)}
-        onSuccess={() => showToast(`Bid placed! Refreshing…`)}
+        onSuccess={() => showToast('Bid placed!')}
       />
 
-      {/* Toast */}
       {toast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-green-700 text-white px-5 py-3 rounded-xl shadow-xl text-sm font-semibold animate-fade-in z-50">
           ✅ {toast}

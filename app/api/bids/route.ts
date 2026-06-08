@@ -6,7 +6,6 @@ export async function POST(req: NextRequest) {
   try {
     const { teamId, bidderName, amount } = await req.json();
 
-    // Server-side time check (protects against client-side manipulation)
     if (Date.now() >= BID_CLOSE_TIME.getTime()) {
       return NextResponse.json({ success: false, error: 'Bidding is closed.' }, { status: 400 });
     }
@@ -20,7 +19,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: `Minimum bid is $${MIN_OPENING_BID}.` }, { status: 400 });
     }
 
-    // Use atomic RPC to prevent race conditions
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase.rpc('place_bid', {
       p_team_id: teamId,
