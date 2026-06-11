@@ -22,7 +22,7 @@ export default function AdminPage() {
   const [bids, setBids]             = useState<Bid[]>([]);
   const [loading, setLoading]       = useState(false);
   const [msg, setMsg]               = useState('');
-  const [activeTab, setActiveTab]   = useState<'teams' | 'bids' | 'payouts'>('teams');
+  const [activeTab, setActiveTab]   = useState<'teams' | 'bids' | 'payouts' | 'earnings'>('teams');
   const [filterTeam, setFilterTeam] = useState('');
 
   async function handleLogin(e: React.FormEvent) {
@@ -119,6 +119,7 @@ export default function AdminPage() {
   }
 
   const totalPool = teams.reduce((s, t) => s + (t.current_bid || 0), 0);
+
   const payouts = teams
     .filter(t => PAYOUT_RATES[t.round_status] !== undefined && t.current_owner)
     .map(t => ({
@@ -127,6 +128,35 @@ export default function AdminPage() {
       pct: (PAYOUT_RATES[t.round_status]! * 100).toFixed(0),
       amount: PAYOUT_RATES[t.round_status]! * totalPool + (PAYOUT_BONUSES[t.round_status] ?? 0),
     }));
+
+  // Build per-person earnings summary
+  const earningsMap = new Map<string, {
+    spent: number;
+    earned: number;
+    teams: { name: string; flag: string; bid: number; status: string; payout: number }[];
+  }>();
+
+  for (const team of teams) {
+    if (!team.current_owner) continue;
+    if (!earningsMap.has(team.current_owner)) {
+      earningsMap.set(team.current_owner, { spent: 0, earned: 0, teams: [] });
+    }
+    const entry = earningsMap.get(team.current_owner)!;
+    const payout = (PAYOUT_RATES[team.round_status] ?? 0) * totalPool + (PAYOUT_BONUSES[team.round_status] ?? 0);
+    entry.spent += team.current_bid || 0;
+    entry.earned += payout;
+    entry.teams.push({
+      name: team.name,
+      flag: team.flag_emoji,
+      bid: team.current_bid || 0,
+      status: ROUND_LABELS?.[team.round_status] ?? team.round_status,
+      payout,
+    });
+  }
+
+  const earningsList = Array.from(earningsMap.entries())
+    .map(([name, data]) => ({ name, ...data, net: data.earned - data.spent }))
+    .sort((a, b) => b.net - a.net);
 
   if (!authed) {
     return (
@@ -180,7 +210,7 @@ export default function AdminPage() {
           { label: 'Total Pool',  val: `$${totalPool.toFixed(2)}` },
           { label: 'Bids Placed', val: bids.length },
           { label: 'Teams Owned', val: teams.filter(t => t.current_bid > 0).length },
-          { label: 'Teams Unbid', val: teams.filter(t => t.current_bid === 0).length },
+          { label: 'Players',     val: earningsList.length },
         ].map(s => (
           <div key={s.label} className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
             <div className="text-gray-500 text-xs uppercase tracking-wider">{s.label}</div>
@@ -191,7 +221,7 @@ export default function AdminPage() {
 
       <div className="px-6">
         <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1 w-fit mb-4">
-          {(['teams', 'bids', 'payouts'] as const).map(t => (
+          {(['teams', 'bids', 'payouts', 'earnings'] as const).map(t => (
             <button
               key={t}
               onClick={() => setActiveTab(t)}
@@ -199,7 +229,7 @@ export default function AdminPage() {
                 activeTab === t ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-300'
               }`}
             >
-              {t === 'teams' ? '⚽ Teams' : t === 'bids' ? '📋 Bids' : '💰 Payouts'}
+              {t === 'teams' ? '⚽ Teams' : t === 'bids' ? '📋 Bids' : t === 'payouts' ? '💰 Payouts' : '🏅 Earnings'}
             </button>
           ))}
         </div>
@@ -352,6 +382,80 @@ export default function AdminPage() {
                 </div>
               );
             })()}
+          </div>
+        )}
+
+        {activeTab === 'earnings' && (
+          <div className="pb-12 space-y-4">
+            <p className="text-gray-500 text-sm mb-2">
+              Ranked by net position (projected earnings minus amount spent). Updates automatically as you mark teams&apos; statuses.
+            </p>
+
+            {/* Summary bar */}
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
+                <div className="text-gray-500 text-xs uppercase tracking-wider">Total Spent</div>
+                <div className="text-white font-black text-xl mt-1">${totalPool.toFixed(2)}</div>
+              </div>
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
+                <div className="text-gray-500 text-xs uppercase tracking-wider">Paid Out So Far</div>
+                <div className="text-green-400 font-black text-xl mt-1">
+                  ${earningsList.reduce((s, p) => s + p.earned, 0).toFixed(2)}
+                </div>
+              </div>
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
+                <div className="text-gray-500 text-xs uppercase tracking-wider">Players</div>
+                <div className="text-white font-black text-xl mt-1">{earningsList.length}</div>
+              </div>
+            </div>
+
+            {earningsList.length === 0 ? (
+              <div className="text-gray-600 text-center py-8">No bids placed yet.</div>
+            ) : (
+              earningsList.map((person, i) => (
+                <div key={person.name} className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                  <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
+                    <div className="flex items-center gap-3">
+                      <span className="text-gray-600 font-bold text-sm w-5">#{i + 1}</span>
+                      <span className="font-black text-lg">{person.name}</span>
+                    </div>
+                    <div className="flex items-center gap-6 text-right">
+                      <div>
+                        <div className="text-gray-500 text-xs">Spent</div>
+                        <div className="text-red-400 font-bold">-${person.spent.toFixed(2)}</div>
+                      </div>
+                      <div>
+                        <div className="text-gray-500 text-xs">Earned</div>
+                        <div className="text-green-400 font-bold">+${person.earned.toFixed(2)}</div>
+                      </div>
+                      <div>
+                        <div className="text-gray-500 text-xs">Net</div>
+                        <div className={`font-black text-lg ${person.net >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {person.net >= 0 ? '+' : ''}${person.net.toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="divide-y divide-gray-800/50">
+                    {person.teams.map(t => (
+                      <div key={t.name} className="flex items-center justify-between px-5 py-2 text-sm">
+                        <div className="flex items-center gap-2 text-gray-300">
+                          <span>{t.flag}</span>
+                          <span>{t.name}</span>
+                          <span className="text-gray-600 text-xs">({t.status})</span>
+                        </div>
+                        <div className="flex items-center gap-6 text-xs">
+                          <span className="text-gray-500">bid ${t.bid.toFixed(2)}</span>
+                          <span className={t.payout > 0 ? 'text-green-400 font-semibold' : 'text-gray-600'}>
+                            {t.payout > 0 ? `earns $${t.payout.toFixed(2)}` : 'eliminated'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         )}
       </div>
