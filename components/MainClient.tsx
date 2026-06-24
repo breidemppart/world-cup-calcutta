@@ -10,8 +10,9 @@ import GroupGrid from './GroupGrid';
 import BidModal from './BidModal';
 import BidHistory from './BidHistory';
 import Leaderboard from './Leaderboard';
+import EarningsView from './EarningsView';
 
-type Tab = 'teams' | 'leaderboard' | 'history';
+type Tab = 'teams' | 'leaderboard' | 'history' | 'earnings';
 
 interface Props {
   initialTeams: Team[];
@@ -44,23 +45,14 @@ export default function MainClient({ initialTeams, initialBids }: Props) {
     const channel = supabase
       .channel('calcutta-live')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'teams' }, payload => {
-        setTeams(prev => prev.map(t => t.id === payload.new.id ? payload.new as Team : t));
+        setTeams(prev => prev.map(t => t.id === payload.new.id ? { ...t, ...payload.new as Team } : t));
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'bids' }, payload => {
         setBids(prev => [payload.new as Bid, ...prev].slice(0, 200));
       })
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   }, []);
-
-  useEffect(() => {
-    if (selectedTeam) {
-      const updated = teams.find(t => t.id === selectedTeam.id);
-      if (updated) setSelectedTeam(updated);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teams]);
 
   function showToast(msg: string) {
     setToast(msg);
@@ -73,6 +65,7 @@ export default function MainClient({ initialTeams, initialBids }: Props) {
     { id: 'teams',       label: '⚽ All Teams' },
     { id: 'leaderboard', label: '🏆 Leaderboard' },
     { id: 'history',     label: '📋 Bid History' },
+    { id: 'earnings',    label: '💰 Earnings' },
   ];
 
   return (
@@ -106,6 +99,10 @@ export default function MainClient({ initialTeams, initialBids }: Props) {
         </div>
       </header>
 
+      {activeTab === 'earnings' && (
+          <EarningsView teams={teams} />
+        )}
+      
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-5">
         <PrizePoolBanner teams={teams} />
 
