@@ -26,15 +26,22 @@ export default function AdminPage() {
   const [filterTeam, setFilterTeam] = useState('');
   const [pendingStatuses, setPendingStatuses] = useState<Record<number, string>>({});
 
-  async function handleLogin(e: React.FormEvent) {
-    e.preventDefault();
+  async function updateStatus(teamId: number, status: string) {
+    setLoading(true);
     const res = await fetch('/api/admin/update-status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password, teamId: 0, status: 'active' }),
+      body: JSON.stringify({ password, teamId, status }),
     });
-    if (res.status === 401) { setAuthError('Wrong password.'); return; }
-    setAuthed(true);
+    const data = await res.json();
+    if (data.success) {
+      setTeams(prev => prev.map(t => t.id === teamId ? { ...t, round_status: status as Team['round_status'] } : t));
+      setPendingStatuses(prev => { const n = { ...prev }; delete n[teamId]; return n; });
+      flash('✅ Status saved');
+    } else {
+      flash('❌ ' + data.error);
+    }
+    setLoading(false);
   }
 
   useEffect(() => {
@@ -255,15 +262,26 @@ export default function AdminPage() {
                           </div>
                         )}
                       </div>
-                      <select
-                        value={team.round_status}
-                        onChange={e => updateStatus(team.id, e.target.value)}
-                        className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
-                      >
-                        {ROUND_OPTIONS.map(opt => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </select>
+                      <div className="flex items-center gap-2">
+  <select
+    value={pendingStatuses[team.id] ?? team.round_status}
+    onChange={e => setPendingStatuses(prev => ({ ...prev, [team.id]: e.target.value }))}
+    className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
+  >
+    {ROUND_OPTIONS.map(opt => (
+      <option key={opt.value} value={opt.value}>{opt.label}</option>
+    ))}
+  </select>
+  {pendingStatuses[team.id] && pendingStatuses[team.id] !== team.round_status && (
+    <button
+      onClick={() => updateStatus(team.id, pendingStatuses[team.id])}
+      disabled={loading}
+      className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-50"
+    >
+      Save
+    </button>
+  )}
+</div>
                     </div>
                   ))}
                 </div>
