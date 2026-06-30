@@ -24,6 +24,7 @@ export default function AdminPage() {
   const [msg, setMsg]               = useState('');
   const [activeTab, setActiveTab]   = useState<'teams' | 'bids' | 'payouts' | 'earnings'>('teams');
   const [filterTeam, setFilterTeam] = useState('');
+  const [pendingStatuses, setPendingStatuses] = useState<Record<number, string>>({});
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
