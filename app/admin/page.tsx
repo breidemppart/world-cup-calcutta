@@ -15,33 +15,26 @@ const ROUND_OPTIONS = [
 ];
 
 export default function AdminPage() {
-  const [password, setPassword]     = useState('');
-  const [authed, setAuthed]         = useState(false);
-  const [authError, setAuthError]   = useState('');
-  const [teams, setTeams]           = useState<Team[]>([]);
-  const [bids, setBids]             = useState<Bid[]>([]);
-  const [loading, setLoading]       = useState(false);
-  const [msg, setMsg]               = useState('');
-  const [activeTab, setActiveTab]   = useState<'teams' | 'bids' | 'payouts' | 'earnings'>('teams');
-  const [filterTeam, setFilterTeam] = useState('');
+  const [password, setPassword]         = useState('');
+  const [authed, setAuthed]             = useState(false);
+  const [authError, setAuthError]       = useState('');
+  const [teams, setTeams]               = useState<Team[]>([]);
+  const [bids, setBids]                 = useState<Bid[]>([]);
+  const [loading, setLoading]           = useState(false);
+  const [msg, setMsg]                   = useState('');
+  const [activeTab, setActiveTab]       = useState<'teams' | 'bids' | 'payouts' | 'earnings'>('teams');
+  const [filterTeam, setFilterTeam]     = useState('');
   const [pendingStatuses, setPendingStatuses] = useState<Record<number, string>>({});
 
-  async function updateStatus(teamId: number, status: string) {
-    setLoading(true);
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault();
     const res = await fetch('/api/admin/update-status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password, teamId, status }),
+      body: JSON.stringify({ password, teamId: 0, status: 'active' }),
     });
-    const data = await res.json();
-    if (data.success) {
-      setTeams(prev => prev.map(t => t.id === teamId ? { ...t, round_status: status as Team['round_status'] } : t));
-      setPendingStatuses(prev => { const n = { ...prev }; delete n[teamId]; return n; });
-      flash('✅ Status saved');
-    } else {
-      flash('❌ ' + data.error);
-    }
-    setLoading(false);
+    if (res.status === 401) { setAuthError('Wrong password.'); return; }
+    setAuthed(true);
   }
 
   useEffect(() => {
@@ -52,7 +45,7 @@ export default function AdminPage() {
     const channel = supabase
       .channel('admin-live')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'teams' }, payload => {
-        setTeams(prev => prev.map(t => t.id === payload.new.id ? payload.new as Team : t));
+        setTeams(prev => prev.map(t => t.id === payload.new.id ? { ...t, ...payload.new as Team } : t));
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'bids' }, payload => {
         setBids(prev => [payload.new as Bid, ...prev]);
@@ -73,14 +66,14 @@ export default function AdminPage() {
         fetch('/api/teams').then(r => r.json()),
         fetch('/api/bids-list').then(r => r.json()),
       ]);
-      if (tr.teams) setTeams(tr.teams);
-      if (br.bids)  setBids(br.bids);
+      setTeams(Array.isArray(tr) ? tr : (tr.teams ?? []));
+      setBids(Array.isArray(br) ? br : (br.bids ?? []));
     } finally {
       setLoading(false);
     }
   }
 
-  async function updateStatus(teamId: number, status: string) {
+  async function saveStatus(teamId: number, status: string) {
     setLoading(true);
     const res = await fetch('/api/admin/update-status', {
       method: 'POST',
@@ -90,9 +83,10 @@ export default function AdminPage() {
     const data = await res.json();
     if (data.success) {
       setTeams(prev => prev.map(t => t.id === teamId ? { ...t, round_status: status as Team['round_status'] } : t));
-      flash('✅ Status updated');
+      setPendingStatuses(prev => { const n = { ...prev }; delete n[teamId]; return n; });
+      flash('✅ Status saved');
     } else {
-      flash('❌ ' + data.error);
+      flash('❌ ' + (data.error ?? 'Failed to save'));
     }
     setLoading(false);
   }
@@ -116,7 +110,7 @@ export default function AdminPage() {
       }));
       flash('✅ Bid deleted');
     } else {
-      flash('❌ ' + data.error);
+      flash('❌ ' + (data.error ?? 'Failed to delete'));
     }
     setLoading(false);
   }
@@ -137,33 +131,18 @@ export default function AdminPage() {
       amount: PAYOUT_RATES[t.round_status]! * totalPool + (PAYOUT_BONUSES[t.round_status] ?? 0),
     }));
 
-  // Build per-person earnings summary
-  const earningsMap = new Map<string, {
-    spent: number;
-    earned: number;
-    teams: { name: string; flag: string; bid: number; status: string; payout: number }[];
-  }>();
-
+  const earningsMap = new Map<string, { spent: number; earned: number; teams: { name: string; flag: string; bid: number; payout: number }[] }>();
   for (const team of teams) {
     if (!team.current_owner) continue;
-    if (!earningsMap.has(team.current_owner)) {
-      earningsMap.set(team.current_owner, { spent: 0, earned: 0, teams: [] });
-    }
+    if (!earningsMap.has(team.current_owner)) earningsMap.set(team.current_owner, { spent: 0, earned: 0, teams: [] });
     const entry = earningsMap.get(team.current_owner)!;
     const payout = (PAYOUT_RATES[team.round_status] ?? 0) * totalPool + (PAYOUT_BONUSES[team.round_status] ?? 0);
     entry.spent += team.current_bid || 0;
     entry.earned += payout;
-    entry.teams.push({
-      name: team.name,
-      flag: team.flag_emoji,
-      bid: team.current_bid || 0,
-      status: ROUND_LABELS?.[team.round_status] ?? team.round_status,
-      payout,
-    });
+    entry.teams.push({ name: team.name, flag: team.flag_emoji, bid: team.current_bid || 0, payout });
   }
-
   const earningsList = Array.from(earningsMap.entries())
-    .map(([name, data]) => ({ name, ...data, net: data.earned - data.spent }))
+    .map(([name, d]) => ({ name, ...d, net: d.earned - d.spent }))
     .sort((a, b) => b.net - a.net);
 
   if (!authed) {
@@ -228,7 +207,7 @@ export default function AdminPage() {
       </div>
 
       <div className="px-6">
-        <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1 w-fit mb-4">
+        <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1 w-fit mb-4 flex-wrap">
           {(['teams', 'bids', 'payouts', 'earnings'] as const).map(t => (
             <button
               key={t}
@@ -244,7 +223,7 @@ export default function AdminPage() {
 
         {activeTab === 'teams' && (
           <div className="space-y-2 pb-12">
-            <p className="text-gray-500 text-sm mb-3">Update each team&apos;s tournament status as they advance or are eliminated.</p>
+            <p className="text-gray-500 text-sm mb-3">Change the dropdown then click <strong>Save</strong> to commit.</p>
             {['A','B','C','D','E','F','G','H','I','J','K','L'].map(group => (
               <div key={group} className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
                 <div className="px-4 py-2 bg-gray-800/50 text-xs font-bold uppercase tracking-wider text-gray-400">
@@ -257,31 +236,29 @@ export default function AdminPage() {
                       <div className="flex-1 min-w-0">
                         <div className="font-semibold text-sm">{team.name}</div>
                         {team.current_owner && (
-                          <div className="text-gray-500 text-xs">
-                            ${team.current_bid.toFixed(2)} — {team.current_owner}
-                          </div>
+                          <div className="text-gray-500 text-xs">${team.current_bid.toFixed(2)} — {team.current_owner}</div>
                         )}
                       </div>
                       <div className="flex items-center gap-2">
-  <select
-    value={pendingStatuses[team.id] ?? team.round_status}
-    onChange={e => setPendingStatuses(prev => ({ ...prev, [team.id]: e.target.value }))}
-    className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
-  >
-    {ROUND_OPTIONS.map(opt => (
-      <option key={opt.value} value={opt.value}>{opt.label}</option>
-    ))}
-  </select>
-  {pendingStatuses[team.id] && pendingStatuses[team.id] !== team.round_status && (
-    <button
-      onClick={() => updateStatus(team.id, pendingStatuses[team.id])}
-      disabled={loading}
-      className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-50"
-    >
-      Save
-    </button>
-  )}
-</div>
+                        <select
+                          value={pendingStatuses[team.id] ?? team.round_status}
+                          onChange={e => setPendingStatuses(prev => ({ ...prev, [team.id]: e.target.value }))}
+                          className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                        >
+                          {ROUND_OPTIONS.map(opt => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </select>
+                        {pendingStatuses[team.id] && pendingStatuses[team.id] !== team.round_status && (
+                          <button
+                            onClick={() => saveStatus(team.id, pendingStatuses[team.id])}
+                            disabled={loading}
+                            className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-50 whitespace-nowrap"
+                          >
+                            Save
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -350,9 +327,7 @@ export default function AdminPage() {
               <div className="text-gray-500 text-xs mt-1">Champion gets 40% + $100 · Runner-Up gets 20% + $50</div>
             </div>
             {payouts.length === 0 ? (
-              <div className="text-gray-600 text-center py-8">
-                No teams have reached a payout-eligible round yet (QF and above).
-              </div>
+              <div className="text-gray-600 text-center py-8">No teams have reached a payout-eligible round yet.</div>
             ) : (
               <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
                 <table className="w-full text-sm">
@@ -373,108 +348,74 @@ export default function AdminPage() {
                           <span className="font-medium">{p.team.name}</span>
                         </td>
                         <td className="px-4 py-3 text-white font-semibold">{p.owner}</td>
-                        <td className="px-4 py-3 text-gray-400">{ROUND_LABELS[p.team.round_status]}</td>
+                        <td className="px-4 py-3 text-gray-400">{ROUND_LABELS?.[p.team.round_status] ?? p.team.round_status}</td>
                         <td className="px-4 py-3 text-gray-300">{p.pct}%</td>
-                        <td className="px-4 py-3 text-green-400 font-bold text-right">
-                          ${p.amount.toFixed(2)}
-                        </td>
+                        <td className="px-4 py-3 text-green-400 font-bold text-right">${p.amount.toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             )}
-            {payouts.length > 0 && (() => {
-              const byPerson = new Map<string, number>();
-              for (const p of payouts) byPerson.set(p.owner, (byPerson.get(p.owner) ?? 0) + p.amount);
-              return (
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                  <h3 className="font-bold mb-3 text-gray-400 text-sm uppercase tracking-wider">Per-Person Summary</h3>
-                  <div className="space-y-2">
-                    {Array.from(byPerson.entries()).sort(([,a],[,b]) => b - a).map(([name, amt]) => (
-                      <div key={name} className="flex justify-between items-center">
-                        <span className="font-semibold">{name}</span>
-                        <span className="text-green-400 font-bold">${amt.toFixed(2)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
           </div>
         )}
 
         {activeTab === 'earnings' && (
           <div className="pb-12 space-y-4">
-            <p className="text-gray-500 text-sm mb-2">
-              Ranked by net position (projected earnings minus amount spent). Updates automatically as you mark teams&apos; statuses.
-            </p>
-
-            {/* Summary bar */}
-            <div className="grid grid-cols-3 gap-3 mb-4">
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
-                <div className="text-gray-500 text-xs uppercase tracking-wider">Total Spent</div>
-                <div className="text-white font-black text-xl mt-1">${totalPool.toFixed(2)}</div>
-              </div>
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
-                <div className="text-gray-500 text-xs uppercase tracking-wider">Paid Out So Far</div>
-                <div className="text-green-400 font-black text-xl mt-1">
-                  ${earningsList.reduce((s, p) => s + p.earned, 0).toFixed(2)}
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { label: 'Prize Pool',      val: `$${totalPool.toFixed(2)}`,                                 color: 'text-white' },
+                { label: 'Paid Out',        val: `$${earningsList.reduce((s,p)=>s+p.earned,0).toFixed(2)}`,  color: 'text-green-400' },
+                { label: 'Players',         val: String(earningsList.length),                                 color: 'text-white' },
+              ].map(s => (
+                <div key={s.label} className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
+                  <div className="text-gray-500 text-xs uppercase tracking-wider">{s.label}</div>
+                  <div className={`${s.color} font-black text-xl mt-1`}>{s.val}</div>
                 </div>
-              </div>
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
-                <div className="text-gray-500 text-xs uppercase tracking-wider">Players</div>
-                <div className="text-white font-black text-xl mt-1">{earningsList.length}</div>
-              </div>
+              ))}
             </div>
-
-            {earningsList.length === 0 ? (
-              <div className="text-gray-600 text-center py-8">No bids placed yet.</div>
-            ) : (
-              earningsList.map((person, i) => (
-                <div key={person.name} className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                  <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
-                    <div className="flex items-center gap-3">
-                      <span className="text-gray-600 font-bold text-sm w-5">#{i + 1}</span>
-                      <span className="font-black text-lg">{person.name}</span>
-                    </div>
-                    <div className="flex items-center gap-6 text-right">
-                      <div>
-                        <div className="text-gray-500 text-xs">Spent</div>
-                        <div className="text-red-400 font-bold">-${person.spent.toFixed(2)}</div>
-                      </div>
-                      <div>
-                        <div className="text-gray-500 text-xs">Earned</div>
-                        <div className="text-green-400 font-bold">+${person.earned.toFixed(2)}</div>
-                      </div>
-                      <div>
-                        <div className="text-gray-500 text-xs">Net</div>
-                        <div className={`font-black text-lg ${person.net >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {person.net >= 0 ? '+' : ''}${person.net.toFixed(2)}
-                        </div>
-                      </div>
-                    </div>
+            {earningsList.map((person, i) => (
+              <div key={person.name} className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
+                  <div className="flex items-center gap-3">
+                    <span className="text-gray-600 font-bold text-sm">#{i + 1}</span>
+                    <span className="font-black text-lg">{person.name}</span>
                   </div>
-                  <div className="divide-y divide-gray-800/50">
-                    {person.teams.map(t => (
-                      <div key={t.name} className="flex items-center justify-between px-5 py-2 text-sm">
-                        <div className="flex items-center gap-2 text-gray-300">
-                          <span>{t.flag}</span>
-                          <span>{t.name}</span>
-                          <span className="text-gray-600 text-xs">({t.status})</span>
-                        </div>
-                        <div className="flex items-center gap-6 text-xs">
-                          <span className="text-gray-500">bid ${t.bid.toFixed(2)}</span>
-                          <span className={t.payout > 0 ? 'text-green-400 font-semibold' : 'text-gray-600'}>
-                            {t.payout > 0 ? `earns $${t.payout.toFixed(2)}` : 'eliminated'}
-                          </span>
-                        </div>
+                  <div className="flex items-center gap-4 sm:gap-6 text-right">
+                    <div>
+                      <div className="text-gray-500 text-xs">Spent</div>
+                      <div className="text-red-400 font-bold">-${person.spent.toFixed(2)}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-500 text-xs">Earned</div>
+                      <div className="text-green-400 font-bold">+${person.earned.toFixed(2)}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-500 text-xs">Net</div>
+                      <div className={`font-black text-lg ${person.net >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {person.net >= 0 ? '+' : ''}${person.net.toFixed(2)}
                       </div>
-                    ))}
+                    </div>
                   </div>
                 </div>
-              ))
-            )}
+                <div className="divide-y divide-gray-800/50">
+                  {person.teams.map(t => (
+                    <div key={t.name} className="flex items-center justify-between px-5 py-2 text-sm">
+                      <div className="flex items-center gap-2 text-gray-300">
+                        <span>{t.flag}</span>
+                        <span>{t.name}</span>
+                      </div>
+                      <div className="flex items-center gap-4 text-xs">
+                        <span className="text-gray-500">bid ${t.bid.toFixed(2)}</span>
+                        <span className={t.payout > 0 ? 'text-green-400 font-semibold' : 'text-gray-600'}>
+                          {t.payout > 0 ? `earns $${t.payout.toFixed(2)}` : 'eliminated'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
